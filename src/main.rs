@@ -1,7 +1,10 @@
 use dotenvy::dotenv;
-use octocrab::models::repos::CommitAuthor;
+use octocrab::models::repos::{CommitAuthor, Content};
 use rand::Rng;
 use std::env;
+use base64::{decode, encode, Engine};
+use base64::{Engine as _, engine::{self, general_purpose}};
+use chrono::{offset::Utc};
 
 const GIT_OWNER: &str = "spamserv";
 const GIT_REPO: &str = "gitspam";
@@ -9,7 +12,11 @@ const GITHUB_PERSONAL_ACCESS_TOKEN: &str = "GITHUB_PERSONAL_ACCESS_TOKEN";
 
 const GITHUB_NAME: &str = "Josip Vojak";
 const GITHUB_EMAIL: &str = "josipvojak@gmail.com";
-const 
+const GITHUB_BRANCH: &str = "main";
+
+const README_FILE_PATH: &str = "README.md";
+const README_FILE_CONTENT: &str = "This is a test message.";
+const GITHUB_COMMIT_MESSAGE: &str = "This is a test commit using octocrab";
 
 #[derive(Debug)]
 struct ActivityDistributionMatrix {
@@ -78,17 +85,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send()
         .await?;
 
-    let repo = octocrab.repos(GIT_OWNER, GIT_REPO).list_branches().send().await?;
-
-
+    // let repo = octocrab.repos(GIT_OWNER, GIT_REPO).list_branches().send().await?;
 
     // Create commits
-    octocrab.repos(GIT_OWNER, GIT_REPO)
-        .create_git_commit_object("This is my message", "tree")
-        .signature("My Signature")
-        .author(CommitAuthor {name:GITHUB_NAME.to_owned(),email:GITHUB_EMAIL.to_owned(), date: todo!() })
-        .committer("What is a commiter>")
-        .send().await?;
+    // let readme_content = octocrab.repos(GIT_OWNER, GIT_REPO)
+    //     .get_content()
+    //     .path(README_FILE_PATH)
+    //     .send()
+    //     .await?;
+    
+    let commit_response = octocrab
+        .repos(GIT_OWNER, GIT_REPO)
+        .create_file(README_FILE_PATH, GITHUB_COMMIT_MESSAGE, README_FILE_CONTENT)
+        .branch(GITHUB_BRANCH) // or whatever branch you want
+        .author(CommitAuthor {
+                name:GITHUB_NAME.to_owned(),
+                email:GITHUB_EMAIL.to_owned(), 
+                date: Some(Utc::now())
+            })
+        
+        .send()
+        .await?;
+                
+        println!("{:?}", commit_response);
+        // .create_git_commit_object("This is my message", "tree")
+        // .signature("My Signature")
+        // .author(CommitAuthor {
+        //     name:GITHUB_NAME.to_owned(),
+        //     email:GITHUB_EMAIL.to_owned(), 
+        //     date: Some(Utc::now())
+        // })
+        // .send().await?;
     // Create pull requests
     // Create issues
     // Create code reviews
