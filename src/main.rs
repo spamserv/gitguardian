@@ -1,10 +1,15 @@
 use dotenvy::dotenv;
+use octocrab::models::repos::CommitAuthor;
 use rand::Rng;
 use std::env;
 
 const GIT_OWNER: &str = "spamserv";
 const GIT_REPO: &str = "gitspam";
 const GITHUB_PERSONAL_ACCESS_TOKEN: &str = "GITHUB_PERSONAL_ACCESS_TOKEN";
+
+const GITHUB_NAME: &str = "Josip Vojak";
+const GITHUB_EMAIL: &str = "josipvojak@gmail.com";
+const 
 
 #[derive(Debug)]
 struct ActivityDistributionMatrix {
@@ -75,21 +80,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let repo = octocrab.repos(GIT_OWNER, GIT_REPO).list_branches().send().await?;
 
-    println!("{:?}", repo);
-    // Get repo
-    // let repo = octocrab
-    //     .repos(GIT_OWNER, GIT_REPO)
-    //     .list_contributors()
-    //     .send()
-    //     .await?;
 
-    Ok(())
-
-    //format!("{:?}", repo);
-    // Get random configuration based on inputs
 
     // Create commits
+    octocrab.repos(GIT_OWNER, GIT_REPO)
+        .create_git_commit_object("This is my message", "tree")
+        .signature("My Signature")
+        .author(CommitAuthor {name:GITHUB_NAME.to_owned(),email:GITHUB_EMAIL.to_owned(), date: todo!() })
+        .committer("What is a commiter>")
+        .send().await?;
     // Create pull requests
     // Create issues
     // Create code reviews
+    Ok(())
 }
