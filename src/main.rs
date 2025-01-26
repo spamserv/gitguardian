@@ -1,10 +1,12 @@
+use base64::engine::general_purpose;
+use base64::Engine;
+use chrono::offset::Utc;
 use dotenvy::dotenv;
-use octocrab::models::repos::{CommitAuthor, Content};
+use octocrab::models::repos::CommitAuthor;
+use octocrab::Octocrab;
 use rand::Rng;
+use serde::Deserialize;
 use std::env;
-use base64::{decode, encode, Engine};
-use base64::{Engine as _, engine::{self, general_purpose}};
-use chrono::{offset::Utc};
 
 const GIT_OWNER: &str = "spamserv";
 const GIT_REPO: &str = "gitspam";
@@ -24,22 +26,47 @@ struct ActivityDistributionMatrix {
     pull_requests: f64,
     code_reviews: f64,
     issues: f64,
-    daily_activities: DailyActivity 
+    daily_activities: DailyActivity,
 }
 
 #[derive(Debug, Clone)]
 struct DailyActivity {
     low: u16,
-    high: u16
+    high: u16,
+}
+
+#[derive(serde::Serialize)]
+struct UpdateFileRequest<'a> {
+    message: &'a str,
+    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    branch: Option<&'a str>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateFileResponse {
+    commit: CommitInfo,
+    content: Option<FileContent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommitInfo {
+    sha: String,
+    // plus any other fields you might need
+}
+
+#[derive(Debug, Deserialize)]
+struct FileContent {
+    sha: String,
+    // plus any other fields you might need
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    let daily_activities = DailyActivity {
-        low: 2,
-        high: 27
-    };
+    let daily_activities = DailyActivity { low: 2, high: 27 };
 
     let mut rng = rand::thread_rng();
     let num_tasks = rng.gen_range(daily_activities.low..=daily_activities.high);
@@ -50,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pull_requests: 0.08,
         code_reviews: 0.20,
         issues: 0.17,
-        daily_activities: daily_activities.clone()
+        daily_activities: daily_activities.clone(),
     };
 
     let mut total_activity_distribution = ActivityDistributionMatrix {
@@ -58,10 +85,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pull_requests: (activity_distribution_matrix.pull_requests * num_tasks as f64).round(),
         code_reviews: (activity_distribution_matrix.code_reviews * num_tasks as f64).round(),
         issues: (activity_distribution_matrix.issues * num_tasks as f64).round(),
-        daily_activities: daily_activities.clone()
+        daily_activities: daily_activities.clone(),
     };
 
-    let total_calculated= (total_activity_distribution.commits + total_activity_distribution.pull_requests + total_activity_distribution.issues + total_activity_distribution.code_reviews) as u16;
+    let total_calculated = (total_activity_distribution.commits
+        + total_activity_distribution.pull_requests
+        + total_activity_distribution.issues
+        + total_activity_distribution.code_reviews) as u16;
 
     let diff: i16 = num_tasks as i16 - total_calculated as i16;
     if diff != 0 {
@@ -78,44 +108,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .build()?;
 
-    let page = octocrab
-        .current()
-        .list_repos_for_authenticated_user()
-        .visibility("private")
+    // Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
+    let readme_content = octocrab
+        .repos(GIT_OWNER, GIT_REPO)
+        .get_content()
+        .path(README_FILE_PATH)
         .send()
         .await?;
 
-    // let repo = octocrab.repos(GIT_OWNER, GIT_REPO).list_branches().send().await?;
+    println!("{:?}", readme_content);
+    let file_data = readme_content.items.get(0);
+    let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
+    let url = file_data.ok_or("File does not exist")?.url.as_str();
 
-    // Create commits
-    // let readme_content = octocrab.repos(GIT_OWNER, GIT_REPO)
-    //     .get_content()
-    //     .path(README_FILE_PATH)
+    println!("{:?} {}", sha, url);
+
+    // let commit_response = octocrab
+    //     .repos(GIT_OWNER, GIT_REPO)
+    //     .create_file(README_FILE_PATH, GITHUB_COMMIT_MESSAGE, README_FILE_CONTENT)
+    //     .branch(GITHUB_BRANCH) // or whatever branch you want
+    //     .author(CommitAuthor {
+    //         name: GITHUB_NAME.to_owned(),
+    //         email: GITHUB_EMAIL.to_owned(),
+    //         date: Some(Utc::now()),
+    //     })
     //     .send()
     //     .await?;
-    
-    let commit_response = octocrab
-        .repos(GIT_OWNER, GIT_REPO)
-        .create_file(README_FILE_PATH, GITHUB_COMMIT_MESSAGE, README_FILE_CONTENT)
-        .branch(GITHUB_BRANCH) // or whatever branch you want
-        .author(CommitAuthor {
-                name:GITHUB_NAME.to_owned(),
-                email:GITHUB_EMAIL.to_owned(), 
-                date: Some(Utc::now())
-            })
-        
-        .send()
-        .await?;
-                
-        println!("{:?}", commit_response);
-        // .create_git_commit_object("This is my message", "tree")
-        // .signature("My Signature")
-        // .author(CommitAuthor {
-        //     name:GITHUB_NAME.to_owned(),
-        //     email:GITHUB_EMAIL.to_owned(), 
-        //     date: Some(Utc::now())
-        // })
-        // .send().await?;
+
+    let update_body = UpdateFileRequest {
+        message: "docs: update README.md",
+        content: general_purpose::STANDARD.encode("Updated README content!"),
+        sha,                  // if Some(...) => update; if None => create
+        branch: Some("main"), // change to "master" or other if needed
+    };
+
+    octocrab.put(url, Some(&update_body)).await?;
+
     // Create pull requests
     // Create issues
     // Create code reviews
