@@ -316,6 +316,7 @@ dependencies = [
  "dotenvy",
  "octocrab",
  "rand",
+ "serde",
  "tokio",
 ]
 
