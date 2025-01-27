@@ -96,6 +96,11 @@ struct ReviewComment<'a> {
     body: &'a str, // The actual comment text
 }
 
+#[derive(Serialize)]
+struct UpdateRepo {
+    delete_branch_on_merge: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
@@ -140,6 +145,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Missing GITHUB_PERSONAL_ACCESS_TOKEN."),
         )
         .build()?;
+
+    // 0. Update repo settings to enable auto-delete of a merged branch
+    let repo_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}");
+    let update_settings = UpdateRepo {
+        delete_branch_on_merge: true,
+    };
+    let updated_repo: serde_json::Value = octocrab.patch(repo_url, Some(&update_settings)).await?;
+
+    // println!("Repository settings updated: {:#}", updated_repo);
 
     // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
     let readme_content = octocrab
@@ -273,5 +287,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send()
         .await?;
     println!("{:?}", merge_response);
+
     Ok(())
 }
