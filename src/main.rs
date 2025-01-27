@@ -20,6 +20,12 @@ const README_FILE_PATH: &str = "README.md";
 const README_FILE_CONTENT: &str = "This is a test message.";
 const GITHUB_COMMIT_MESSAGE: &str = "This is a test commit using octocrab";
 
+const GITHUB_ISSUE_NAME: &str = "Issue#1";
+const GITHUB_ISSUE_BODY: &str = "Issue#1 Body";
+
+const GITHUB_PULL_REQUEST_BRANCH: &str = "pull-request-branch";
+const GITHUB_PULL_REQUEST_TITLE: &str = "Let's test this pull request.";
+const GITHUB_PULL_REQUEST_BODY: &str = "This is a body of pull request.";
 #[derive(Debug)]
 struct ActivityDistributionMatrix {
     commits: f64,
@@ -61,6 +67,14 @@ struct CommitInfo {
 struct FileContent {
     sha: String,
     // plus any other fields you might need
+}
+
+#[derive(serde::Serialize)]
+struct CreateRef {
+    // GitHub expects the full ref format, e.g. "refs/heads/my-new-branch"
+    #[serde(rename = "ref")]
+    ref_: String,
+    sha: String,
 }
 
 #[tokio::main]
@@ -116,12 +130,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send()
         .await?;
 
-    println!("{:?}", readme_content);
+    //println!("{:?}", readme_content);
     let file_data = readme_content.items.get(0);
     let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
     let url = file_data.ok_or("File does not exist")?.url.as_str();
 
-    println!("{:?} {}", sha, url);
+    //println!("{:?} {}", sha, url);
 
     // let commit_response = octocrab
     //     .repos(GIT_OWNER, GIT_REPO)
@@ -138,17 +152,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let update_body = UpdateFileRequest {
         message: "docs: update README.md",
         content: general_purpose::STANDARD.encode("Updated README content!"),
-        sha,                  // if Some(...) => update; if None => create
-        branch: Some("main"), // change to "master" or other if needed
+        sha,                         // if Some(...) => update; if None => create
+        branch: Some(GITHUB_BRANCH), // change to "master" or other if needed
     };
 
-    // TODO: Handle this so that it does not crash the app (Ok, Err: continue, because it fails)
-    let response = octocrab
-    .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
-    .await?;
+    // octocrab
+    //     .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
+    //     .await?;
 
-    // Create pull requests
     // Create issues
+    // octocrab
+    //     .issues(GIT_OWNER, GIT_REPO)
+    //     .create(GITHUB_ISSUE_NAME)
+    //     .body(GITHUB_ISSUE_BODY)
+    //     .send()
+    //     .await?;
+
+    /*
+        Create pull requests:
+        0. Get base branch SHA
+        1. Create branch
+        2. Push commit
+        3. Create pull request
+    */
+
+    // 0. Get base branch SHA
+    let get_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/ref/heads/{GITHUB_BRANCH}");
+    let base_ref_value: serde_json::Value = octocrab.get(get_ref_url, None::<&()>).await?;
+    let base_sha = base_ref_value["object"]["sha"]
+        .as_str()
+        .ok_or("Could not extract base branch SHA")?
+        .to_string();
+
+    // 1. Create branch
+    let ref_ = format!("refs/heads/{}", GITHUB_PULL_REQUEST_BRANCH);
+    let create_ref_body = CreateRef {
+        ref_,
+        sha: base_sha,
+    };
+
+    let post_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/refs");
+    let create_branch_response: serde_json::Value = octocrab
+        .post::<CreateRef, _>(post_ref_url, Some(&create_ref_body))
+        .await?;
+    println!("Create branch response: {:#}", create_branch_response);
+    
+    // Make a new commit
+    let update_body = UpdateFileRequest {
+        message: "New branch PR: update README.md",
+        content: general_purpose::STANDARD.encode("Pull Request: Updated README content!"),
+        sha,                         // if Some(...) => update; if None => create
+        branch: Some(GITHUB_PULL_REQUEST_BRANCH), // change to "master" or other if needed
+    };
+
+    octocrab
+        .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
+        .await?;
+
+    octocrab
+        .pulls(GIT_OWNER, GIT_REPO)
+        .create(
+            GITHUB_PULL_REQUEST_TITLE,
+            GITHUB_PULL_REQUEST_BRANCH,
+            GITHUB_BRANCH,
+        )
+        .body(GITHUB_PULL_REQUEST_BODY)
+        .send()
+        .await?;
+
     // Create code reviews
     Ok(())
 }
