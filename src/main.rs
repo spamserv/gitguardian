@@ -5,7 +5,7 @@ use dotenvy::dotenv;
 use octocrab::models::repos::CommitAuthor;
 use octocrab::Octocrab;
 use rand::Rng;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::env;
 
 const GIT_OWNER: &str = "spamserv";
@@ -77,6 +77,25 @@ struct CreateRef {
     sha: String,
 }
 
+#[derive(Serialize)]
+struct CreateReviewRequest<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    comments: Option<Vec<ReviewComment<'a>>>,
+}
+
+#[derive(Serialize)]
+struct ReviewComment<'a> {
+    path: &'a str, // e.g. "src/lib.rs"
+    position: u32, // The line index in the diff to comment on
+    body: &'a str, // The actual comment text
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
@@ -122,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .build()?;
 
-    // Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
+    // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
     let readme_content = octocrab
         .repos(GIT_OWNER, GIT_REPO)
         .get_content()
@@ -160,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
     //     .await?;
 
-    // Create issues
+    // 2. Create issues
     // octocrab
     //     .issues(GIT_OWNER, GIT_REPO)
     //     .create(GITHUB_ISSUE_NAME)
@@ -169,11 +188,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .await?;
 
     /*
-        Create pull requests:
-        0. Get base branch SHA
-        1. Create branch
-        2. Push commit
-        3. Create pull request
+        3. Create pull requests:
+            0. Get base branch SHA
+            1. Create branch
+            2. Push commit
+            3. Create pull request
+            4. Do code review
+            5. Merge pull request
+            6. Delete branch
     */
 
     // 0. Get base branch SHA
@@ -195,21 +217,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let create_branch_response: serde_json::Value = octocrab
         .post::<CreateRef, _>(post_ref_url, Some(&create_ref_body))
         .await?;
-    println!("Create branch response: {:#}", create_branch_response);
-    
+    //println!("Create branch response: {:#}", create_branch_response);
+
     // Make a new commit
     let update_body = UpdateFileRequest {
         message: "New branch PR: update README.md",
         content: general_purpose::STANDARD.encode("Pull Request: Updated README content!"),
-        sha,                         // if Some(...) => update; if None => create
+        sha,                                      // if Some(...) => update; if None => create
         branch: Some(GITHUB_PULL_REQUEST_BRANCH), // change to "master" or other if needed
     };
 
+    // 2. Push Commit
     octocrab
         .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
         .await?;
 
-    octocrab
+    // 3. Create pull request
+    let pull_request = octocrab
         .pulls(GIT_OWNER, GIT_REPO)
         .create(
             GITHUB_PULL_REQUEST_TITLE,
@@ -220,6 +244,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send()
         .await?;
 
-    // Create code reviews
+    //println!("Pull request response {:?}", pull_request);
+
+    // 4. Create review request
+    let review_request = CreateReviewRequest {
+        body: Some("Looks good to me!"),
+        event: Some("COMMENT"), // or "APPROVE", "REQUEST_CHANGES" // cannot do self APPROVAL
+        comments: Some(vec![
+            // ReviewComment {
+            //     path: README_FILE_PATH,
+            //     position: 0,  // line index in the diff (not the file line number)
+            //     body: "This should create a comment on the line number 0.",
+            // },
+        ]), // no inline comments in this example
+    };
+    let review_request_url = format!(
+        "/repos/{}/{}/pulls/{}/reviews",
+        GIT_OWNER, GIT_REPO, pull_request.number
+    );
+    let review_request_response: serde_json::Value = octocrab
+        .post::<CreateReviewRequest, _>(review_request_url, Some(&review_request))
+        .await?;
+
     Ok(())
 }
