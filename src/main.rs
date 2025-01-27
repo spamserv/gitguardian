@@ -266,5 +266,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .post::<CreateReviewRequest, _>(review_request_url, Some(&review_request))
         .await?;
 
+    // 5. Merge pull request
+    let merge_response = octocrab
+        .pulls(GIT_OWNER, GIT_REPO)
+        .merge(pull_request.number)
+        .send()
+        .await?;
+    println!("{:?}", merge_response);
     Ok(())
 }
