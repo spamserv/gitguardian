@@ -143,7 +143,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // TODO: Handle this so that it does not crash the app (Ok, Err: continue, because it fails)
-    octocrab.put(url, Some(&update_body)).await?;
+    let response = octocrab
+    .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
+    .await?;
 
     // Create pull requests
     // Create issues
