@@ -1,12 +1,12 @@
 use base64::engine::general_purpose;
 use base64::Engine;
-use chrono::offset::Utc;
+use chrono::{offset::Utc, DateTime};
 use dotenvy::dotenv;
 use octocrab::models::repos::CommitAuthor;
 use octocrab::Octocrab;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::{env, fmt::format};
 
 const GIT_OWNER: &str = "spamserv";
 const GIT_REPO: &str = "gitspam";
@@ -20,11 +20,11 @@ const README_FILE_PATH: &str = "README.md";
 const README_FILE_CONTENT: &str = "This is a test message.";
 const GITHUB_COMMIT_MESSAGE: &str = "This is a test commit using octocrab";
 
-const GITHUB_ISSUE_NAME: &str = "Issue#1";
-const GITHUB_ISSUE_BODY: &str = "Issue#1 Body";
+const GITHUB_ISSUE_NAME: &str = "Issue";
+const GITHUB_ISSUE_BODY: &str = "Issue Body";
 
 const GITHUB_PULL_REQUEST_BRANCH: &str = "pull-request-branch";
-const GITHUB_PULL_REQUEST_TITLE: &str = "Let's test this pull request.";
+const GITHUB_PULL_REQUEST_TITLE: &str = "Automated Pull Request.";
 const GITHUB_PULL_REQUEST_BODY: &str = "This is a body of pull request.";
 #[derive(Debug)]
 struct ActivityDistributionMatrix {
@@ -154,52 +154,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let updated_repo: serde_json::Value = octocrab.patch(repo_url, Some(&update_settings)).await?;
 
     // println!("Repository settings updated: {:#}", updated_repo);
+    let sha: Option<&str> = None;
+    let readme_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/contents/{README_FILE_PATH}");
+    for commit_index in 0..total_activity_distribution.commits as u16 {
+        // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
+        let readme_content = octocrab
+            .repos(GIT_OWNER, GIT_REPO)
+            .get_content()
+            .path(README_FILE_PATH)
+            .send()
+            .await?;
 
-    // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
-    let readme_content = octocrab
-        .repos(GIT_OWNER, GIT_REPO)
-        .get_content()
-        .path(README_FILE_PATH)
-        .send()
-        .await?;
+        //println!("{:?}", readme_content);
+        let file_data = readme_content.items.get(0);
+        let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
+        // let url = file_data.ok_or("File does not exist")?.url.as_str();
+        // println!("{}", url);
+        //println!("{:?} {}", sha, url);
 
-    //println!("{:?}", readme_content);
-    let file_data = readme_content.items.get(0);
-    let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
-    let url = file_data.ok_or("File does not exist")?.url.as_str();
+        let message = format!("docs: update README.md {}", commit_index);
+        let update_body = UpdateFileRequest {
+            message: &message,
+            content: general_purpose::STANDARD.encode("Updated README content!"),
+            sha,                         // if Some(...) => update; if None => create
+            branch: Some(GITHUB_BRANCH), // change to "master" or other if needed
+        };
 
-    //println!("{:?} {}", sha, url);
+        // octocrab
+        //     .put::<UpdateFileResponse, _, _>(readme_url.clone(), Some(&update_body))
+        //     .await?;
+    }
 
-    // let commit_response = octocrab
-    //     .repos(GIT_OWNER, GIT_REPO)
-    //     .create_file(README_FILE_PATH, GITHUB_COMMIT_MESSAGE, README_FILE_CONTENT)
-    //     .branch(GITHUB_BRANCH) // or whatever branch you want
-    //     .author(CommitAuthor {
-    //         name: GITHUB_NAME.to_owned(),
-    //         email: GITHUB_EMAIL.to_owned(),
-    //         date: Some(Utc::now()),
-    //     })
-    //     .send()
-    //     .await?;
-
-    let update_body = UpdateFileRequest {
-        message: "docs: update README.md",
-        content: general_purpose::STANDARD.encode("Updated README content!"),
-        sha,                         // if Some(...) => update; if None => create
-        branch: Some(GITHUB_BRANCH), // change to "master" or other if needed
-    };
-
-    // octocrab
-    //     .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
-    //     .await?;
-
-    // 2. Create issues
-    // octocrab
-    //     .issues(GIT_OWNER, GIT_REPO)
-    //     .create(GITHUB_ISSUE_NAME)
-    //     .body(GITHUB_ISSUE_BODY)
-    //     .send()
-    //     .await?;
+    for issue_index in 0..total_activity_distribution.issues as u16 {
+        // 2. Create issues
+        let title = format!("{} #{}", GITHUB_ISSUE_NAME, issue_index);
+        // octocrab
+        //     .issues(GIT_OWNER, GIT_REPO)
+        //     .create(title)
+        //     .body(GITHUB_ISSUE_BODY)
+        //     .send()
+        //     .await?;
+    }
 
     /*
         3. Create pull requests:
@@ -212,81 +207,98 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             6. Delete branch
     */
 
-    // 0. Get base branch SHA
-    let get_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/ref/heads/{GITHUB_BRANCH}");
-    let base_ref_value: serde_json::Value = octocrab.get(get_ref_url, None::<&()>).await?;
-    let base_sha = base_ref_value["object"]["sha"]
-        .as_str()
-        .ok_or("Could not extract base branch SHA")?
-        .to_string();
+    for pull_request_index in 0..total_activity_distribution.issues as u16 {
+        let readme_content = octocrab
+            .repos(GIT_OWNER, GIT_REPO)
+            .get_content()
+            .path(README_FILE_PATH)
+            .send()
+            .await?;
 
-    // 1. Create branch
-    let ref_ = format!("refs/heads/{}", GITHUB_PULL_REQUEST_BRANCH);
-    let create_ref_body = CreateRef {
-        ref_,
-        sha: base_sha,
-    };
+        let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
 
-    let post_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/refs");
-    let create_branch_response: serde_json::Value = octocrab
-        .post::<CreateRef, _>(post_ref_url, Some(&create_ref_body))
-        .await?;
-    //println!("Create branch response: {:#}", create_branch_response);
+        // 0. Get base branch SHA
+        let get_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/ref/heads/{GITHUB_BRANCH}");
+        let base_ref_value: serde_json::Value = octocrab.get(get_ref_url, None::<&()>).await?;
+        let base_sha = base_ref_value["object"]["sha"]
+            .as_str()
+            .ok_or("Could not extract base branch SHA")?
+            .to_string();
 
-    // Make a new commit
-    let update_body = UpdateFileRequest {
-        message: "New branch PR: update README.md",
-        content: general_purpose::STANDARD.encode("Pull Request: Updated README content!"),
-        sha,                                      // if Some(...) => update; if None => create
-        branch: Some(GITHUB_PULL_REQUEST_BRANCH), // change to "master" or other if needed
-    };
+        // 1. Create branch
+        let ref_ = format!("refs/heads/{}", GITHUB_PULL_REQUEST_BRANCH);
+        let create_ref_body = CreateRef {
+            ref_,
+            sha: base_sha.clone(),
+        };
 
-    // 2. Push Commit
-    octocrab
-        .put::<UpdateFileResponse, _, _>(url, Some(&update_body))
-        .await?;
+        let post_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/refs");
+        let create_branch_response: serde_json::Value = octocrab
+            .post::<CreateRef, _>(post_ref_url, Some(&create_ref_body))
+            .await?;
+        //println!("Create branch response: {:#}", create_branch_response);
 
-    // 3. Create pull request
-    let pull_request = octocrab
-        .pulls(GIT_OWNER, GIT_REPO)
-        .create(
-            GITHUB_PULL_REQUEST_TITLE,
-            GITHUB_PULL_REQUEST_BRANCH,
-            GITHUB_BRANCH,
-        )
-        .body(GITHUB_PULL_REQUEST_BODY)
-        .send()
-        .await?;
+        // Make a new commit
+        let message = format!("{} - New branch PR: update README.md", pull_request_index);
+        let update_body = UpdateFileRequest {
+            message: &message,
+            content: general_purpose::STANDARD.encode("Pull Request: Updated README content!"),
+            sha,                                      // if Some(...) => update; if None => create
+            branch: Some(GITHUB_PULL_REQUEST_BRANCH), // change to "master" or other if needed
+        };
 
-    //println!("Pull request response {:?}", pull_request);
+        // 2. Push Commit
+        octocrab
+            .put::<UpdateFileResponse, _, _>(readme_url.clone(), Some(&update_body))
+            .await?;
 
-    // 4. Create review request
-    let review_request = CreateReviewRequest {
-        body: Some("Looks good to me!"),
-        event: Some("COMMENT"), // or "APPROVE", "REQUEST_CHANGES" // cannot do self APPROVAL
-        comments: Some(vec![
-            // ReviewComment {
-            //     path: README_FILE_PATH,
-            //     position: 0,  // line index in the diff (not the file line number)
-            //     body: "This should create a comment on the line number 0.",
-            // },
-        ]), // no inline comments in this example
-    };
-    let review_request_url = format!(
-        "/repos/{}/{}/pulls/{}/reviews",
-        GIT_OWNER, GIT_REPO, pull_request.number
-    );
-    let review_request_response: serde_json::Value = octocrab
-        .post::<CreateReviewRequest, _>(review_request_url, Some(&review_request))
-        .await?;
+        // 3. Create pull request
+        let pull_request_title = format!(
+            "{} - {}",
+            chrono::offset::Local::now(),
+            GITHUB_PULL_REQUEST_TITLE
+        );
+        let pull_request = octocrab
+            .pulls(GIT_OWNER, GIT_REPO)
+            .create(
+                pull_request_title,
+                GITHUB_PULL_REQUEST_BRANCH,
+                GITHUB_BRANCH,
+            )
+            .body(GITHUB_PULL_REQUEST_BODY)
+            .send()
+            .await?;
 
-    // 5. Merge pull request
-    let merge_response = octocrab
-        .pulls(GIT_OWNER, GIT_REPO)
-        .merge(pull_request.number)
-        .send()
-        .await?;
-    println!("{:?}", merge_response);
+        //println!("Pull request response {:?}", pull_request);
+
+        // 4. Create review request
+        let review_request = CreateReviewRequest {
+            body: Some("Looks good to me!"),
+            event: Some("COMMENT"), // or "APPROVE", "REQUEST_CHANGES" // cannot do self APPROVAL
+            comments: Some(vec![
+                // ReviewComment {
+                //     path: README_FILE_PATH,
+                //     position: 0,  // line index in the diff (not the file line number)
+                //     body: "This should create a comment on the line number 0.",
+                // },
+            ]), // no inline comments in this example
+        };
+        let review_request_url = format!(
+            "/repos/{}/{}/pulls/{}/reviews",
+            GIT_OWNER, GIT_REPO, pull_request.number
+        );
+        let review_request_response: serde_json::Value = octocrab
+            .post::<CreateReviewRequest, _>(review_request_url, Some(&review_request))
+            .await?;
+
+        // 5. Merge pull request
+        let merge_response = octocrab
+            .pulls(GIT_OWNER, GIT_REPO)
+            .merge(pull_request.number)
+            .send()
+            .await?;
+        println!("{:?}", merge_response);
+    }
 
     Ok(())
 }
