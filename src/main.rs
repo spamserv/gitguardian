@@ -104,7 +104,7 @@ struct UpdateRepo {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    let daily_activities = DailyActivity { low: 2, high: 27 };
+    let daily_activities = DailyActivity { low: 2, high: 13 };
 
     let mut rng = rand::thread_rng();
     let num_tasks = rng.gen_range(daily_activities.low..=daily_activities.high);
@@ -180,20 +180,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             branch: Some(GITHUB_BRANCH), // change to "master" or other if needed
         };
 
-        // octocrab
-        //     .put::<UpdateFileResponse, _, _>(readme_url.clone(), Some(&update_body))
-        //     .await?;
+        octocrab
+            .put::<UpdateFileResponse, _, _>(readme_url.clone(), Some(&update_body))
+            .await?;
     }
 
     for issue_index in 0..total_activity_distribution.issues as u16 {
         // 2. Create issues
         let title = format!("{} #{}", GITHUB_ISSUE_NAME, issue_index);
-        // octocrab
-        //     .issues(GIT_OWNER, GIT_REPO)
-        //     .create(title)
-        //     .body(GITHUB_ISSUE_BODY)
-        //     .send()
-        //     .await?;
+        octocrab
+            .issues(GIT_OWNER, GIT_REPO)
+            .create(title)
+            .body(GITHUB_ISSUE_BODY)
+            .send()
+            .await?;
     }
 
     /*
@@ -214,6 +214,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .path(README_FILE_PATH)
             .send()
             .await?;
+        let offset = chrono::offset::Local::now().timestamp_micros().to_string();
 
         let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
 
@@ -226,7 +227,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .to_string();
 
         // 1. Create branch
-        let ref_ = format!("refs/heads/{}", GITHUB_PULL_REQUEST_BRANCH);
+        let pull_request_branch_name = format!("{}-{}", GITHUB_PULL_REQUEST_BRANCH, offset);
+        let ref_ = format!("refs/heads/{}", pull_request_branch_name);
         let create_ref_body = CreateRef {
             ref_,
             sha: base_sha.clone(),
@@ -244,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             message: &message,
             content: general_purpose::STANDARD.encode("Pull Request: Updated README content!"),
             sha,                                      // if Some(...) => update; if None => create
-            branch: Some(GITHUB_PULL_REQUEST_BRANCH), // change to "master" or other if needed
+            branch: Some(&pull_request_branch_name), // change to "master" or other if needed
         };
 
         // 2. Push Commit
@@ -262,7 +264,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .pulls(GIT_OWNER, GIT_REPO)
             .create(
                 pull_request_title,
-                GITHUB_PULL_REQUEST_BRANCH,
+                pull_request_branch_name,
                 GITHUB_BRANCH,
             )
             .body(GITHUB_PULL_REQUEST_BODY)
