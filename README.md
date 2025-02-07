@@ -6,7 +6,7 @@ Creates and maintains a Top Star Github Profile based on the activity distributi
     <img src="https://github.com/spamserv/gitguardian/blob/main/logo.png?raw=true" alt="drawing" width="300"/>
 </p>
 
-## What does it do?
+## How to?
 
 Populate config file corresponding with the activity graph on Github:
 
@@ -26,8 +26,12 @@ Your activity distribution configuration can look something like this:
     - max_activities: u8 (e.g. - 20)
 
 
+## Explanation
+
 Activities should sum to 1 (100%). 
+
 Set a `minimum` and `maximum` value for the number of activities per day (total number of commits, code reviews, pull requests and issues).
+
 The configuration will generate dummy activities based on the activity diagram.
 
 You can set it as `cron` job or run it daily/occassionally or create a GitHub Action (TBD).
