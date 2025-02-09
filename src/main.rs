@@ -21,20 +21,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:?}", activity_distribution_matrix);
     let git_manager = GitManager::new(activity_distribution_matrix).await?;
 
-    git_manager.enable_branch_autodelete();
+    git_manager.enable_branch_autodelete().await?;
 
-    
+    git_manager.create_commits().await?;
 
-    for issue_index in 0..activity_distribution_matrix.issues as u16 {
-        // 2. Create issues
-        let title = format!("{} #{}", github::GITHUB_ISSUE_NAME, issue_index);
-        octocrab
-            .issues(github::GIT_OWNER, github::GIT_REPO)
-            .create(title)
-            .body(github::GITHUB_ISSUE_BODY)
-            .send()
-            .await?;
-    }
+    git_manager.create_issues().await?;
+
+
 
     /*
         3. Create pull requests:
