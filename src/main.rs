@@ -1,86 +1,10 @@
 use base64::engine::general_purpose;
 use base64::Engine;
 use dotenvy::dotenv;
-use gitguardian::constants::github;
+use gitguardian::{config::activity_distribution::{ActivityDistributionMatrix, DailyActivity}, constants::github, git_models::git_models::{CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo}};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
-
-
-#[derive(Debug)]
-struct ActivityDistributionMatrix {
-    commits: f64,
-    pull_requests: f64,
-    code_reviews: f64,
-    issues: f64,
-    daily_activities: DailyActivity,
-}
-
-#[derive(Debug, Clone)]
-struct DailyActivity {
-    low: u16,
-    high: u16,
-}
-
-#[derive(serde::Serialize)]
-struct UpdateFileRequest<'a> {
-    message: &'a str,
-    content: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    sha: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    branch: Option<&'a str>,
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdateFileResponse {
-    commit: CommitInfo,
-    content: Option<FileContent>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CommitInfo {
-    sha: String,
-    // plus any other fields you might need
-}
-
-#[derive(Debug, Deserialize)]
-struct FileContent {
-    sha: String,
-    // plus any other fields you might need
-}
-
-#[derive(serde::Serialize)]
-struct CreateRef {
-    // GitHub expects the full ref format, e.g. "refs/heads/my-new-branch"
-    #[serde(rename = "ref")]
-    ref_: String,
-    sha: String,
-}
-
-#[derive(Serialize)]
-struct CreateReviewRequest<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    body: Option<&'a str>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    event: Option<&'a str>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    comments: Option<Vec<ReviewComment<'a>>>,
-}
-
-#[derive(Serialize)]
-struct ReviewComment<'a> {
-    path: &'a str, // e.g. "src/lib.rs"
-    position: u32, // The line index in the diff to comment on
-    body: &'a str, // The actual comment text
-}
-
-#[derive(Serialize)]
-struct UpdateRepo {
-    delete_branch_on_merge: bool,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
