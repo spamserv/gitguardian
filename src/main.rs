@@ -1,7 +1,7 @@
 use base64::engine::general_purpose;
 use base64::Engine;
 use dotenvy::dotenv;
-use gitguardian::{config::activity_distribution::{self, ActivityDistributionMatrix, DailyActivity}, constants::github, git_models::git_models::{CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo}};
+use gitguardian::{config::activity_distribution::{self, ActivityDistributionMatrix, DailyActivity}, constants::github, git_manager::manager::GitManager, git_models::git_models::{CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo}};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -19,52 +19,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
    
 
     println!("{:?}", activity_distribution_matrix);
+    let git_manager = GitManager::new(activity_distribution_matrix).await?;
 
-    let octocrab = octocrab::Octocrab::builder()
-        .personal_token(
-            env::var(github::GITHUB_PERSONAL_ACCESS_TOKEN)
-                .to_owned()
-                .expect("Missing GITHUB_PERSONAL_ACCESS_TOKEN."),
-        )
-        .build()?;
+    git_manager.enable_branch_autodelete();
 
-    // 0. Update repo settings to enable auto-delete of a merged branch
-    let repo_url = format!("/repos/{}/{}", github::GIT_OWNER, github::GIT_REPO);
-    let update_settings = UpdateRepo {
-        delete_branch_on_merge: true,
-    };
-    let _updated_repo: serde_json::Value = octocrab.patch(repo_url, Some(&update_settings)).await?;
-
-    // println!("Repository settings updated: {:#}", updated_repo);
-    let readme_url = format!("/repos/{}/{}/contents/{}", github::GIT_OWNER, github::GIT_REPO, github::README_FILE_PATH);
-    for commit_index in 0..activity_distribution_matrix.commits as u16 {
-        // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
-        let readme_content = octocrab
-            .repos(github::GIT_OWNER, github::GIT_REPO)
-            .get_content()
-            .path(github::README_FILE_PATH)
-            .send()
-            .await?;
-
-        //println!("{:?}", readme_content);
-        let file_data = readme_content.items.get(0);
-        let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
-        // let url = file_data.ok_or("File does not exist")?.url.as_str();
-        // println!("{}", url);
-        //println!("{:?} {}", sha, url);
-
-        let message = format!("docs: update README.md {}", commit_index);
-        let update_body = UpdateFileRequest {
-            message: &message,
-            content: general_purpose::STANDARD.encode("Updated README content!"),
-            sha,                         // if Some(...) => update; if None => create
-            branch: Some(github::GITHUB_BRANCH), // change to "master" or other if needed
-        };
-
-        octocrab
-            .put::<UpdateFileResponse, _, _>(readme_url.clone(), Some(&update_body))
-            .await?;
-    }
+    
 
     for issue_index in 0..activity_distribution_matrix.issues as u16 {
         // 2. Create issues
