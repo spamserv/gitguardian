@@ -1,7 +1,7 @@
 use base64::engine::general_purpose;
 use base64::Engine;
 use dotenvy::dotenv;
-use gitguardian::{config::activity_distribution::{ActivityDistributionMatrix, DailyActivity}, constants::github, git_models::git_models::{CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo}};
+use gitguardian::{config::activity_distribution::{self, ActivityDistributionMatrix, DailyActivity}, constants::github, git_models::git_models::{CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo}};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -12,36 +12,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let daily_activities = DailyActivity { low: 2, high: 13 };
 
     let mut rng = rand::thread_rng();
-    let num_tasks = rng.gen_range(daily_activities.low..=daily_activities.high);
-    println!("Total tasks for the day: {}", num_tasks);
+    let activities = rng.gen_range(daily_activities.low..=daily_activities.high);
+    println!("Total tasks for the day: {}", activities);
 
-    let activity_distribution_matrix = ActivityDistributionMatrix {
-        commits: 0.55,
-        pull_requests: 0.08,
-        code_reviews: 0.20,
-        issues: 0.17,
-        daily_activities: daily_activities.clone(),
-    };
+    let activity_distribution_matrix = ActivityDistributionMatrix::new(0.55, 0.08, 0.20, 0.17, activities);
+   
 
-    let mut total_activity_distribution = ActivityDistributionMatrix {
-        commits: (activity_distribution_matrix.commits * num_tasks as f64).round(),
-        pull_requests: (activity_distribution_matrix.pull_requests * num_tasks as f64).round(),
-        code_reviews: (activity_distribution_matrix.code_reviews * num_tasks as f64).round(),
-        issues: (activity_distribution_matrix.issues * num_tasks as f64).round(),
-        daily_activities: daily_activities.clone(),
-    };
-
-    let total_calculated = (total_activity_distribution.commits
-        + total_activity_distribution.pull_requests
-        + total_activity_distribution.issues
-        + total_activity_distribution.code_reviews) as u16;
-
-    let diff: i16 = num_tasks as i16 - total_calculated as i16;
-    if diff != 0 {
-        total_activity_distribution.commits += diff as f64
-    }
-
-    println!("{:?}", total_activity_distribution);
+    println!("{:?}", activity_distribution_matrix);
 
     let octocrab = octocrab::Octocrab::builder()
         .personal_token(
@@ -60,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // println!("Repository settings updated: {:#}", updated_repo);
     let readme_url = format!("/repos/{}/{}/contents/{}", github::GIT_OWNER, github::GIT_REPO, github::README_FILE_PATH);
-    for commit_index in 0..total_activity_distribution.commits as u16 {
+    for commit_index in 0..activity_distribution_matrix.commits as u16 {
         // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
         let readme_content = octocrab
             .repos(github::GIT_OWNER, github::GIT_REPO)
@@ -89,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
     }
 
-    for issue_index in 0..total_activity_distribution.issues as u16 {
+    for issue_index in 0..activity_distribution_matrix.issues as u16 {
         // 2. Create issues
         let title = format!("{} #{}", github::GITHUB_ISSUE_NAME, issue_index);
         octocrab
@@ -111,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             6. Delete branch
     */
 
-    for pull_request_index in 0..total_activity_distribution.issues as u16 {
+    for pull_request_index in 0..activity_distribution_matrix.issues as u16 {
         let readme_content = octocrab
             .repos(github::GIT_OWNER, github::GIT_REPO)
             .get_content()
