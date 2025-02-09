@@ -1,31 +1,12 @@
 use base64::engine::general_purpose;
 use base64::Engine;
-use chrono::{offset::Utc, DateTime};
 use dotenvy::dotenv;
-use octocrab::models::repos::CommitAuthor;
-use octocrab::Octocrab;
+use gitguardian::constants::github;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::{env, fmt::format};
+use std::env;
 
-const GIT_OWNER: &str = "spamserv";
-const GIT_REPO: &str = "gitspam";
-const GITHUB_PERSONAL_ACCESS_TOKEN: &str = "GITHUB_PERSONAL_ACCESS_TOKEN";
 
-const GITHUB_NAME: &str = "Josip Vojak";
-const GITHUB_EMAIL: &str = "josipvojak@gmail.com";
-const GITHUB_BRANCH: &str = "main";
-
-const README_FILE_PATH: &str = "README.md";
-const README_FILE_CONTENT: &str = "This is a test message.";
-const GITHUB_COMMIT_MESSAGE: &str = "This is a test commit using octocrab";
-
-const GITHUB_ISSUE_NAME: &str = "Issue";
-const GITHUB_ISSUE_BODY: &str = "Issue Body";
-
-const GITHUB_PULL_REQUEST_BRANCH: &str = "pull-request-branch";
-const GITHUB_PULL_REQUEST_TITLE: &str = "Automated Pull Request.";
-const GITHUB_PULL_REQUEST_BODY: &str = "This is a body of pull request.";
 #[derive(Debug)]
 struct ActivityDistributionMatrix {
     commits: f64,
@@ -140,28 +121,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let octocrab = octocrab::Octocrab::builder()
         .personal_token(
-            env::var(GITHUB_PERSONAL_ACCESS_TOKEN)
+            env::var(github::GITHUB_PERSONAL_ACCESS_TOKEN)
                 .to_owned()
                 .expect("Missing GITHUB_PERSONAL_ACCESS_TOKEN."),
         )
         .build()?;
 
     // 0. Update repo settings to enable auto-delete of a merged branch
-    let repo_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}");
+    let repo_url = format!("/repos/{}/{}", github::GIT_OWNER, github::GIT_REPO);
     let update_settings = UpdateRepo {
         delete_branch_on_merge: true,
     };
-    let updated_repo: serde_json::Value = octocrab.patch(repo_url, Some(&update_settings)).await?;
+    let _updated_repo: serde_json::Value = octocrab.patch(repo_url, Some(&update_settings)).await?;
 
     // println!("Repository settings updated: {:#}", updated_repo);
-    let sha: Option<&str> = None;
-    let readme_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/contents/{README_FILE_PATH}");
+    let readme_url = format!("/repos/{}/{}/contents/{}", github::GIT_OWNER, github::GIT_REPO, github::README_FILE_PATH);
     for commit_index in 0..total_activity_distribution.commits as u16 {
         // 1. Create commits (README.md must exist and it already exist...but otherwise check and create if it does not)
         let readme_content = octocrab
-            .repos(GIT_OWNER, GIT_REPO)
+            .repos(github::GIT_OWNER, github::GIT_REPO)
             .get_content()
-            .path(README_FILE_PATH)
+            .path(github::README_FILE_PATH)
             .send()
             .await?;
 
@@ -177,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             message: &message,
             content: general_purpose::STANDARD.encode("Updated README content!"),
             sha,                         // if Some(...) => update; if None => create
-            branch: Some(GITHUB_BRANCH), // change to "master" or other if needed
+            branch: Some(github::GITHUB_BRANCH), // change to "master" or other if needed
         };
 
         octocrab
@@ -187,11 +167,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for issue_index in 0..total_activity_distribution.issues as u16 {
         // 2. Create issues
-        let title = format!("{} #{}", GITHUB_ISSUE_NAME, issue_index);
+        let title = format!("{} #{}", github::GITHUB_ISSUE_NAME, issue_index);
         octocrab
-            .issues(GIT_OWNER, GIT_REPO)
+            .issues(github::GIT_OWNER, github::GIT_REPO)
             .create(title)
-            .body(GITHUB_ISSUE_BODY)
+            .body(github::GITHUB_ISSUE_BODY)
             .send()
             .await?;
     }
@@ -209,9 +189,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for pull_request_index in 0..total_activity_distribution.issues as u16 {
         let readme_content = octocrab
-            .repos(GIT_OWNER, GIT_REPO)
+            .repos(github::GIT_OWNER, github::GIT_REPO)
             .get_content()
-            .path(README_FILE_PATH)
+            .path(github::README_FILE_PATH)
             .send()
             .await?;
         let offset = chrono::offset::Local::now().timestamp_micros().to_string();
@@ -219,7 +199,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
 
         // 0. Get base branch SHA
-        let get_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/ref/heads/{GITHUB_BRANCH}");
+        let get_ref_url = format!("/repos/{}/{}/git/ref/heads/{}", github::GIT_OWNER, github::GIT_REPO, github::GITHUB_BRANCH);
         let base_ref_value: serde_json::Value = octocrab.get(get_ref_url, None::<&()>).await?;
         let base_sha = base_ref_value["object"]["sha"]
             .as_str()
@@ -227,15 +207,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .to_string();
 
         // 1. Create branch
-        let pull_request_branch_name = format!("{}-{}", GITHUB_PULL_REQUEST_BRANCH, offset);
+        let pull_request_branch_name = format!("{}-{}", github::GITHUB_PULL_REQUEST_BRANCH, offset);
         let ref_ = format!("refs/heads/{}", pull_request_branch_name);
         let create_ref_body = CreateRef {
             ref_,
             sha: base_sha.clone(),
         };
 
-        let post_ref_url = format!("/repos/{GIT_OWNER}/{GIT_REPO}/git/refs");
-        let create_branch_response: serde_json::Value = octocrab
+        let post_ref_url = format!("/repos/{}/{}/git/refs", github::GIT_OWNER, github::GIT_REPO);
+        let _create_branch_response: serde_json::Value = octocrab
             .post::<CreateRef, _>(post_ref_url, Some(&create_ref_body))
             .await?;
         //println!("Create branch response: {:#}", create_branch_response);
@@ -258,16 +238,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let pull_request_title = format!(
             "{} - {}",
             chrono::offset::Local::now(),
-            GITHUB_PULL_REQUEST_TITLE
+            github::GITHUB_PULL_REQUEST_TITLE
         );
         let pull_request = octocrab
-            .pulls(GIT_OWNER, GIT_REPO)
+            .pulls(github::GIT_OWNER, github::GIT_REPO)
             .create(
                 pull_request_title,
                 pull_request_branch_name,
-                GITHUB_BRANCH,
+                github::GITHUB_BRANCH,
             )
-            .body(GITHUB_PULL_REQUEST_BODY)
+            .body(github::GITHUB_PULL_REQUEST_BODY)
             .send()
             .await?;
 
@@ -287,15 +267,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let review_request_url = format!(
             "/repos/{}/{}/pulls/{}/reviews",
-            GIT_OWNER, GIT_REPO, pull_request.number
+            github::GIT_OWNER, github::GIT_REPO, pull_request.number
         );
-        let review_request_response: serde_json::Value = octocrab
+        let _review_request_response: serde_json::Value = octocrab
             .post::<CreateReviewRequest, _>(review_request_url, Some(&review_request))
             .await?;
 
         // 5. Merge pull request
         let merge_response = octocrab
-            .pulls(GIT_OWNER, GIT_REPO)
+            .pulls(github::GIT_OWNER, github::GIT_REPO)
             .merge(pull_request.number)
             .send()
             .await?;
