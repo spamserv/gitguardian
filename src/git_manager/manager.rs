@@ -52,6 +52,8 @@ impl GitManager {
             .patch(repo_url, Some(&update_settings))
             .await?;
 
+        //println!("Repository settings updated: {:#}", _updated_repo);
+
         Ok(())
     }
 

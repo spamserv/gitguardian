@@ -1,22 +1,23 @@
-use base64::engine::general_purpose;
-use base64::Engine;
 use dotenvy::dotenv;
-use gitguardian::{config::activity_distribution::{self, ActivityDistributionMatrix, DailyActivity}, constants::github, git_manager::manager::GitManager, git_models::git_models::{CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo}};
+use gitguardian::{
+    config::{activity_distribution::ActivityDistributionMatrix, config::Data},
+    git_manager::manager::GitManager,
+};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
-use std::env;
+
+const CONFIG_FILE: &str = "config.toml";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    let daily_activities = DailyActivity { low: 2, high: 13 };
+    let config = std::fs::read_to_string(CONFIG_FILE)?;
+    let config_data: Data = toml::from_str(&config)?;
 
     let mut rng = rand::thread_rng();
-    let activities = rng.gen_range(daily_activities.low..=daily_activities.high);
+    let activities = rng.gen_range(config_data.config.low..=config_data.config.high);
     println!("Total tasks for the day: {}", activities);
 
-    let activity_distribution_matrix = ActivityDistributionMatrix::new(0.55, 0.08, 0.20, 0.17, activities);
-   
+    let activity_distribution_matrix = ActivityDistributionMatrix::new(config_data, activities);
 
     println!("{:?}", activity_distribution_matrix);
     let git_manager = GitManager::new(activity_distribution_matrix).await?;
