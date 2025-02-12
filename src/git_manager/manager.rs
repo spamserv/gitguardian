@@ -58,8 +58,6 @@ impl GitManager {
     }
 
     pub async fn create_commits(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // println!("Repository settings updated: {:#}", updated_repo);
-
         for commit_index in 0..self.activity_distribution.commits as u16 {
             let readme_content = self
                 .octocrab
@@ -68,12 +66,14 @@ impl GitManager {
                 .path(github::README_FILE_PATH)
                 .send()
                 .await?;
+
             let file_data = readme_content.items.get(0);
             let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
             let message = format!("docs: update README.md {}", commit_index);
+            let content = format!("Updated README content with commit index #{}!", commit_index);
             let update_body = UpdateFileRequest {
                 message: &message,
-                content: general_purpose::STANDARD.encode("Updated README content!"),
+                content: general_purpose::STANDARD.encode(content),
                 sha,                                 // if Some(...) => update; if None => create
                 branch: Some(github::GITHUB_BRANCH), // change to "master" or other if needed
             };
@@ -107,7 +107,7 @@ impl GitManager {
         let ref_ = format!("refs/heads/{}", branch_name);
         let create_ref_body = CreateRef {
             ref_,
-            sha: base_sha.clone().to_owned(),
+            sha: base_sha.to_owned(),
         };
 
         let post_ref_url = format!("/repos/{}/{}/git/refs", github::GIT_OWNER, github::GIT_REPO);

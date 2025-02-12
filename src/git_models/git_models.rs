@@ -13,18 +13,18 @@ pub struct UpdateFileRequest<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateFileResponse {
-    _commit: CommitInfo,
-    _content: Option<FileContent>,
+    commit: CommitInfo,
+    content: Option<FileContent>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CommitInfo {
-    _sha: String,
+    sha: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct FileContent {
-    _sha: String,
+    sha: String,
     // plus any other fields you might need
 }
 
