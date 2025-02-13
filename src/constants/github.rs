@@ -1,5 +1,7 @@
 pub const GIT_OWNER: &str = "spamserv";
 pub const GIT_REPO: &str = "gitspam";
+pub const GIT_REPO_DESCRIPTION: &str = "Repository created by github.com/spamserv/gitguardian to create dummy activities.";
+pub const GIT_REPO_IS_PRIVATE: bool = false;
 pub const GITHUB_PERSONAL_ACCESS_TOKEN: &str = "GITHUB_PERSONAL_ACCESS_TOKEN";
 
 pub const GITHUB_NAME: &str = "Josip Vojak";

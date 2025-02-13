@@ -12,12 +12,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
     // Read config
-    let config = Config::read_from_string(CONFIG_FILE)?;
+    let config = Config::read_from_file(CONFIG_FILE)?;
 
     // Create a matrix of activities
     let adm = config.get_activity_distribution_matrix();
 
-    let git_manager = GitManager::new(adm).await?;
+    let git_manager = GitManager::new(config, adm).await?;
     git_manager.enable_branch_autodelete().await?;
     git_manager.create_commits().await?;
     git_manager.create_issues().await?;

@@ -5,3 +5,5 @@ code_reviews = 0.20
 issues = 0.17
 low = 4
 high = 18
+repository_name = "gitspam"
+repository_owner = "spamserv"

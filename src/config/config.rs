@@ -18,10 +18,12 @@ pub struct Config {
     pub issues: f64,
     pub low: u16,
     pub high: u16,
+    pub repository_name: String,
+    pub repository_owner: String,
 }
 
 impl Config {
-    pub fn read_from_string(file: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn read_from_file(file: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let config = std::fs::read_to_string(file)?;
         let config_data: Data = toml::from_str(&config)?;
         Ok(config_data.config)

@@ -4,8 +4,8 @@ use base64::{engine::general_purpose, Engine};
 use octocrab::{Error, Octocrab};
 
 use crate::{
-    config::activity_distribution::ActivityDistributionMatrix,
-    constants::github,
+    config::{activity_distribution::ActivityDistributionMatrix, config::Config},
+    constants::github::{self, GIT_REPO_DESCRIPTION, GIT_REPO_IS_PRIVATE},
     git_models::git_models::{
         CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo,
     },
@@ -13,12 +13,16 @@ use crate::{
 
 pub struct GitManager {
     octocrab: Octocrab,
+    config: Config,
     activity_distribution: ActivityDistributionMatrix,
     readme_url: String,
 }
 
 impl GitManager {
-    pub async fn new(activity: ActivityDistributionMatrix) -> Result<GitManager, Error> {
+    pub async fn new(
+        config: Config,
+        activity: ActivityDistributionMatrix,
+    ) -> Result<GitManager, Error> {
         let readme_url = format!(
             "/repos/{}/{}/contents/{}",
             github::GIT_OWNER,
@@ -35,10 +39,43 @@ impl GitManager {
 
         let manager = GitManager {
             readme_url,
+            config,
             activity_distribution: activity,
             octocrab,
         };
+
         Ok(manager)
+    }
+
+    pub async fn create_repository(&self) -> Result<(), Error> {
+        // 0. Create repository
+        // Try to fetch the repository.
+        let github_repo: &str = &self.config.repository_name;
+        let github_owner: &str = &self.config.repository_owner;
+        let repo_result = self.octocrab.repos(github_owner, github_repo).get().await;
+
+        match repo_result {
+            // If the repository already exists, print its full name.
+            Ok(repo) => {
+                println!("Repository already exists: {:?}", repo.full_name);
+            }
+            // If we get a 404 (Not Found), then create the repository.
+            Err(_) => {
+                println!("Repository not found. Creating repository: {}", github_repo);
+                // Create the repository for the current user.
+                self.octocrab
+                    .repos(github_owner, github_repo)
+                    .generate("rust")
+                    .owner(github_owner)
+                    .description(GIT_REPO_DESCRIPTION)
+                    .include_all_branches(true)
+                    .private(GIT_REPO_IS_PRIVATE)
+                    .send()
+                    .await?;
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn enable_branch_autodelete(&self) -> Result<(), Error> {
@@ -69,7 +106,10 @@ impl GitManager {
 
             let sha = readme_content.items.first().map(|i| i.sha.as_str());
             let message = format!("docs: update README.md {}", commit_index);
-            let content = format!("Updated README content with commit index #{}!", commit_index);
+            let content = format!(
+                "Updated README content with commit index #{}!",
+                commit_index
+            );
             let update_body = UpdateFileRequest {
                 message: &message,
                 content: general_purpose::STANDARD.encode(content),
@@ -165,9 +205,13 @@ impl GitManager {
 
             // Make a new commit
             let message = format!("{} - New branch PR: update README.md", pull_request_index);
+            let content = format!(
+                "Pull Request: Updated README content with pull request index #{}!",
+                pull_request_index
+            );
             let update_body = UpdateFileRequest {
                 message: &message,
-                content: general_purpose::STANDARD.encode("Pull Request: Updated README content!"),
+                content: general_purpose::STANDARD.encode(content),
                 sha, // if Some(...) => update; if None => create
                 branch: Some(&pull_request_branch_name), // change to "master" or other if needed
             };
