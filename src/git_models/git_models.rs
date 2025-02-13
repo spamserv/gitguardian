@@ -11,18 +11,18 @@ pub struct UpdateFileRequest<'a> {
     pub branch: Option<&'a str>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct UpdateFileResponse {
     commit: CommitInfo,
     content: Option<FileContent>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct CommitInfo {
     sha: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct FileContent {
     sha: String,
     // plus any other fields you might need

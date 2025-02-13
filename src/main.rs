@@ -1,9 +1,8 @@
 use dotenvy::dotenv;
 use gitguardian::{
-    config::{activity_distribution::ActivityDistributionMatrix, config::Config},
+    config::config::Config,
     git_manager::manager::GitManager,
 };
-use rand::Rng;
 
 const CONFIG_FILE: &str = "config.toml";
 

@@ -67,8 +67,7 @@ impl GitManager {
                 .send()
                 .await?;
 
-            let file_data = readme_content.items.get(0);
-            let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
+            let sha = readme_content.items.first().map(|i| i.sha.as_str());
             let message = format!("docs: update README.md {}", commit_index);
             let content = format!("Updated README content with commit index #{}!", commit_index);
             let update_body = UpdateFileRequest {
@@ -141,7 +140,7 @@ impl GitManager {
                 .await?;
             let offset = chrono::offset::Local::now().timestamp_micros().to_string();
 
-            let sha = readme_content.items.get(0).map(|i| i.sha.as_str());
+            let sha = readme_content.items.first().map(|i| i.sha.as_str());
 
             // 0. Get base branch SHA
             let get_ref_url = format!(

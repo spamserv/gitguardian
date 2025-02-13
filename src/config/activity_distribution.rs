@@ -16,9 +16,7 @@ pub struct DailyActivity {
 
 impl ActivityDistributionMatrix {
     pub fn new(config: &Config, activities: u16) -> Self {
-
-        let activity_matrix = Self::calculate_activity_matrix_from_distribuion(config, activities);
-        activity_matrix
+        Self::calculate_activity_matrix_from_distribuion(config, activities)
     }
 
     fn calculate_activity_matrix_from_distribuion(config: &Config, activities: u16) -> ActivityDistributionMatrix{
@@ -40,6 +38,6 @@ impl ActivityDistributionMatrix {
             adm.commits += diff as f64;
         }
 
-        return adm
+        adm
     }
 }
