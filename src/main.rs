@@ -1,6 +1,6 @@
 use dotenvy::dotenv;
 use gitguardian::{
-    config::{activity_distribution::ActivityDistributionMatrix, config::Data},
+    config::{activity_distribution::ActivityDistributionMatrix, config::Config},
     git_manager::manager::GitManager,
 };
 use rand::Rng;
@@ -9,18 +9,16 @@ const CONFIG_FILE: &str = "config.toml";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load env variables
     dotenv().ok();
-    let config = std::fs::read_to_string(CONFIG_FILE)?;
-    let config_data: Data = toml::from_str(&config)?;
 
-    let mut rng = rand::thread_rng();
-    let activities = rng.gen_range(config_data.config.low..=config_data.config.high);
-    println!("Total tasks for the day: {}", activities);
+    // Read config
+    let config = Config::read_from_string(CONFIG_FILE)?;
 
-    let activity_distribution_matrix = ActivityDistributionMatrix::new(config_data, activities);
+    // Create a matrix of activities
+    let adm = config.get_activity_distribution_matrix();
 
-    println!("{:?}", activity_distribution_matrix);
-    let git_manager = GitManager::new(activity_distribution_matrix).await?;
+    let git_manager = GitManager::new(adm).await?;
     git_manager.enable_branch_autodelete().await?;
     git_manager.create_commits().await?;
     git_manager.create_issues().await?;

@@ -1,4 +1,4 @@
-use super::config::Data;
+use super::config::Config;
 #[derive(Debug)]
 pub struct ActivityDistributionMatrix {
     pub commits: f64,
@@ -15,18 +15,18 @@ pub struct DailyActivity {
 }
 
 impl ActivityDistributionMatrix {
-    pub fn new(config: Data, activities: u16) -> Self {
+    pub fn new(config: &Config, activities: u16) -> Self {
 
         let activity_matrix = Self::calculate_activity_matrix_from_distribuion(config, activities);
         activity_matrix
     }
 
-    fn calculate_activity_matrix_from_distribuion(config: Data, activities: u16) -> ActivityDistributionMatrix{
+    fn calculate_activity_matrix_from_distribuion(config: &Config, activities: u16) -> ActivityDistributionMatrix{
         let mut adm = ActivityDistributionMatrix {
-            commits: (config.config.commits * activities as f64).round(),
-            pull_requests: (config.config.pull_requests * activities as f64).round(),
-            code_reviews: (config.config.code_reviews * activities as f64).round(),
-            issues: (config.config.issues * activities as f64).round(),
+            commits: (config.commits * activities as f64).round(),
+            pull_requests: (config.pull_requests * activities as f64).round(),
+            code_reviews: (config.code_reviews * activities as f64).round(),
+            issues: (config.issues * activities as f64).round(),
             activities,
         };
     
