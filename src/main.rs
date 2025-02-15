@@ -1,8 +1,5 @@
 use dotenvy::dotenv;
-use gitguardian::{
-    config::config::Config,
-    git_manager::manager::GitManager,
-};
+use gitguardian::{config::config::Config, git_manager::manager::GitManager};
 
 const CONFIG_FILE: &str = "config.toml";
 
@@ -18,6 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let adm = config.get_activity_distribution_matrix();
 
     let git_manager = GitManager::new(config, adm).await?;
+    //git_manager.create_repository().await?;
     git_manager.enable_branch_autodelete().await?;
     git_manager.create_commits().await?;
     git_manager.create_issues().await?;
