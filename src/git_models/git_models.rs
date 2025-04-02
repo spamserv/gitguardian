@@ -59,3 +59,10 @@ pub struct ReviewComment<'a> {
 pub struct UpdateRepo {
     pub delete_branch_on_merge: bool,
 }
+
+#[derive(Serialize)]
+pub struct CreateRepoRequest {
+    pub name: String,
+    pub description: String,
+    pub private: bool,
+}

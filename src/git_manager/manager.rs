@@ -2,12 +2,14 @@ use std::env;
 
 use base64::{engine::general_purpose, Engine};
 use octocrab::{Error, Octocrab};
+use serde_json::json;
 
 use crate::{
     config::{activity_distribution::ActivityDistributionMatrix, config::Config},
     constants::github::{self, GIT_REPO_DESCRIPTION, GIT_REPO_IS_PRIVATE},
     git_models::git_models::{
-        CreateRef, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse, UpdateRepo,
+        CreateRef, CreateRepoRequest, CreateReviewRequest, UpdateFileRequest, UpdateFileResponse,
+        UpdateRepo,
     },
 };
 
@@ -54,26 +56,24 @@ impl GitManager {
         let github_owner: &str = &self.config.repository_owner;
         let repo_result = self.octocrab.repos(github_owner, github_repo).get().await;
 
-        match repo_result {
-            // If the repository already exists, print its full name.
-            Ok(repo) => {
-                println!("Repository already exists: {:?}", repo.full_name);
-            }
-            // If we get a 404 (Not Found), then create the repository.
-            Err(_) => {
-                println!("Repository not found. Creating repository: {}", github_repo);
-                // Create the repository for the current user.
-                self.octocrab
-                    .repos(github_owner, github_repo)
-                    .generate("rust")
-                    .owner(github_owner)
-                    .description(GIT_REPO_DESCRIPTION)
-                    .include_all_branches(true)
-                    .private(GIT_REPO_IS_PRIVATE)
-                    .send()
-                    .await?;
-            }
+        if repo_result.is_ok() {
+            println!("Repository already exists: {:?}", github_repo);
+            return Ok(());
         }
+
+        let post_create_repo_url = format!("/user/repos");
+        let repo_request = CreateRepoRequest {
+            name: github_repo.to_string(),
+            description: GIT_REPO_DESCRIPTION.to_string(),
+            private: GIT_REPO_IS_PRIVATE,
+        };
+
+        let _create_branch_response: serde_json::Value = self
+            .octocrab
+            .post::<CreateRepoRequest, _>(post_create_repo_url, Some(&repo_request))
+            .await?;
+
+        println!("Repository with name {} created successfully!", github_repo);
 
         Ok(())
     }
